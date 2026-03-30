@@ -14,9 +14,22 @@ type AttendanceDoc = {
   remark?: string;
 };
 
+type LeaveDoc = {
+  userId: string;
+  date: string;
+  type: "annual" | "monthly";
+  duration: 0.5 | 1;
+  period?: "morning" | "afternoon";
+  reason?: string;
+  createdAt: Date;
+};
+
 type UserDoc = {
   _id: string;
   name: string;
+  annualLeaveRemaining: number;
+  monthlyLeaveRemaining: number;
+  workDays?: number[];
 };
 
 export async function GET(req: NextRequest) {
@@ -30,9 +43,16 @@ export async function GET(req: NextRequest) {
       .find({})
       .sort({ date: 1, userId: 1 })
       .toArray();
+    const leaves = await db
+      .collection<LeaveDoc>("leave_records")
+      .find({})
+      .sort({ date: 1, userId: 1 })
+      .toArray();
 
     const userById = new Map(users.map((user) => [user._id, user.name]));
-    const rows = attendance.map((record) => ({
+
+    // Sheet 1: Attendance
+    const attendanceRows = attendance.map((record) => ({
       이름: userById.get(record.userId) || record.userId,
       날짜: record.date,
       출근시각: record.checkIn || "",
@@ -41,11 +61,69 @@ export async function GET(req: NextRequest) {
       비고: record.isOvernight ? "철야" : record.remark || "",
     }));
 
-    const worksheet = XLSX.utils.json_to_sheet(rows, {
+    // Sheet 2: Leave records
+    const leaveRows = leaves.map((record) => ({
+      이름: userById.get(record.userId) || record.userId,
+      날짜: record.date,
+      유형: record.type === "annual" ? "연차" : "월차",
+      일수: record.duration,
+      시간대:
+        record.duration === 0.5
+          ? record.period === "morning"
+            ? "오전"
+            : "오후"
+          : "종일",
+      사유: record.reason || "",
+    }));
+
+    // Sheet 3: Leave balance summary
+    const balanceRows = users.map((user) => {
+      const userLeaves = leaves.filter((l) => l.userId === user._id);
+      const usedAnnual = userLeaves
+        .filter((l) => l.type === "annual")
+        .reduce((sum, l) => sum + l.duration, 0);
+      const usedMonthly = userLeaves
+        .filter((l) => l.type === "monthly")
+        .reduce((sum, l) => sum + l.duration, 0);
+
+      return {
+        이름: user.name,
+        "근무일수(주)": (user.workDays || [1, 2, 3, 4, 5]).length,
+        "연차 잔여": user.annualLeaveRemaining,
+        "연차 사용": usedAnnual,
+        "연차 합계": user.annualLeaveRemaining + usedAnnual,
+        "월차 잔여": user.monthlyLeaveRemaining,
+        "월차 사용": usedMonthly,
+        "월차 합계": user.monthlyLeaveRemaining + usedMonthly,
+      };
+    });
+
+    const workbook = XLSX.utils.book_new();
+
+    const attendanceSheet = XLSX.utils.json_to_sheet(attendanceRows, {
       header: ["이름", "날짜", "출근시각", "퇴근시각", "근무시간", "비고"],
     });
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "출퇴근기록");
+    XLSX.utils.book_append_sheet(workbook, attendanceSheet, "출퇴근기록");
+
+    const leaveSheet = XLSX.utils.json_to_sheet(leaveRows, {
+      header: ["이름", "날짜", "유형", "일수", "시간대", "사유"],
+    });
+    XLSX.utils.book_append_sheet(workbook, leaveSheet, "연차월차 사용내역");
+
+    const balanceSheet = XLSX.utils.json_to_sheet(balanceRows, {
+      header: [
+        "이름",
+        "근무일수(주)",
+        "연차 잔여",
+        "연차 사용",
+        "연차 합계",
+        "월차 잔여",
+        "월차 사용",
+        "월차 합계",
+      ],
+    });
+    XLSX.utils.book_append_sheet(workbook, balanceSheet, "잔여현황");
+
     const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
 
     return new NextResponse(buffer, {
@@ -53,7 +131,7 @@ export async function GET(req: NextRequest) {
       headers: {
         "Content-Type":
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": `attachment; filename="attendance_all_${new Date()
+        "Content-Disposition": `attachment; filename="attendance_${new Date()
           .toISOString()
           .slice(0, 10)}.xlsx"`,
       },

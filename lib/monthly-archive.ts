@@ -12,6 +12,15 @@ type AttendanceDoc = {
   remark?: string;
 };
 
+type LeaveDoc = {
+  userId: string;
+  date: string;
+  type: "annual" | "monthly";
+  duration: 0.5 | 1;
+  period?: "morning" | "afternoon";
+  reason?: string;
+};
+
 type UserDoc = {
   _id: string;
   name: string;
@@ -67,16 +76,21 @@ async function fetchMonthlyData(yearMonth: string) {
     .find({ date: { $regex: `^${yearMonth}-` } })
     .sort({ date: 1, userId: 1 })
     .toArray();
+  const leaves = await db
+    .collection<LeaveDoc>("leave_records")
+    .find({ date: { $regex: `^${yearMonth}-` } })
+    .sort({ date: 1, userId: 1 })
+    .toArray();
 
   const userById = new Map(users.map((user) => [user._id, user.name]));
 
-  return { userById, attendance };
+  return { userById, attendance, leaves };
 }
 
 export async function writeMonthlyArchive(yearMonth: string) {
   await ensureMonthDir(yearMonth);
 
-  const { userById, attendance } = await fetchMonthlyData(yearMonth);
+  const { userById, attendance, leaves } = await fetchMonthlyData(yearMonth);
 
   const attendanceRows = attendance.map((record) => ({
     이름: userById.get(record.userId) || record.userId,
@@ -87,12 +101,31 @@ export async function writeMonthlyArchive(yearMonth: string) {
     비고: record.isOvernight ? "철야" : record.remark || "",
   }));
 
+  const leaveRows = leaves.map((record) => ({
+    이름: userById.get(record.userId) || record.userId,
+    날짜: record.date,
+    유형: record.type === "annual" ? "연차" : "월차",
+    일수: record.duration,
+    시간대:
+      record.duration === 0.5
+        ? record.period === "morning"
+          ? "오전"
+          : "오후"
+        : "종일",
+    사유: record.reason || "",
+  }));
+
+  const workbook = XLSX.utils.book_new();
+
   const attendanceSheet = XLSX.utils.json_to_sheet(attendanceRows, {
     header: ["이름", "날짜", "출근시각", "퇴근시각", "근무시간", "비고"],
   });
-
-  const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, attendanceSheet, "출퇴근 기록");
+
+  const leaveSheet = XLSX.utils.json_to_sheet(leaveRows, {
+    header: ["이름", "날짜", "유형", "일수", "시간대", "사유"],
+  });
+  XLSX.utils.book_append_sheet(workbook, leaveSheet, "연차월차 사용내역");
 
   XLSX.writeFile(workbook, getWorkbookPath(yearMonth));
 }
