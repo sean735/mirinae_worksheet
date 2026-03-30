@@ -1,0 +1,85 @@
+services:
+  app:
+    image: my-project_app:latest
+    container_name: mirinae-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3000}
+      AUTH_SESSION_SECRET: ${AUTH_SESSION_SECRET:-replace-me}
+      ALLOWED_GOOGLE_DOMAIN: ${ALLOWED_GOOGLE_DOMAIN:-mirinae.io}
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      GOOGLE_OAUTH_REDIRECT_URI: ${GOOGLE_OAUTH_REDIRECT_URI:-}
+      MONGODB_URI: ${MONGODB_URI:-mongodb://mongodb:27017}
+      MONGODB_DB: ${MONGODB_DB:-mirinae_attendance}
+      DEFAULT_USER_ID: ${DEFAULT_USER_ID:-demo-user}
+      ATTENDANCE_ARCHIVE_DIR: ${ATTENDANCE_ARCHIVE_DIR:-/app/data/attendance}
+      GOOGLE_CALENDAR_ENABLED: ${GOOGLE_CALENDAR_ENABLED:-false}
+      GOOGLE_CALENDAR_ID: ${GOOGLE_CALENDAR_ID:-}
+      GOOGLE_CLIENT_EMAIL: ${GOOGLE_CLIENT_EMAIL:-}
+      GOOGLE_PRIVATE_KEY: ${GOOGLE_PRIVATE_KEY:-}
+      NEXT_PUBLIC_GOOGLE_TEAM_CALENDAR_ID: ${NEXT_PUBLIC_GOOGLE_TEAM_CALENDAR_ID:-}
+    volumes:
+      - attendance_data:/app/data/attendance
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:3000/api/health').then((r)=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  mongodb:
+    image: mongo:7
+    container_name: mirinae-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: mirinae_attendance
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test:
+        ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  backup:
+    image: mongo:7
+    container_name: mirinae-backup
+    restart: unless-stopped
+    entrypoint: ["sh", "/scripts/backup.sh"]
+    environment:
+      MONGO_URI: ${MONGODB_URI:-mongodb://mongodb:27017}
+      MONGO_DB: ${MONGODB_DB:-mirinae_attendance}
+      ATTENDANCE_DIR: /app/data/attendance
+      BACKUP_DIR: /backup
+      BACKUP_INTERVAL_HOURS: ${BACKUP_INTERVAL_HOURS:-24}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+    volumes:
+      - attendance_data:/app/data/attendance:ro
+      - backup_data:/backup
+      - ./docker/backup/backup.sh:/scripts/backup.sh:ro
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+volumes:
+  mongodb_data:
+  attendance_data:
+  backup_data:
