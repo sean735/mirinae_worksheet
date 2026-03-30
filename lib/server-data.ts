@@ -139,8 +139,17 @@ async function applyLeaveAccrualIfNeeded(
   const lastMonthlyKey = user.monthlyLeaveLastGrantedAt || dueMonthlyKey;
   const lastAnnualKey = user.annualLeaveLastGrantedAt || dueAnnualKey;
 
-  const monthlyToGrant = Math.max(0, monthDiff(lastMonthlyKey, dueMonthlyKey));
-  const annualToGrant = Math.max(0, yearDiff(lastAnnualKey, dueAnnualKey));
+  const rawMonthly = Math.max(0, monthDiff(lastMonthlyKey, dueMonthlyKey));
+  const rawAnnual = Math.max(0, yearDiff(lastAnnualKey, dueAnnualKey));
+
+  // Proportional leave calculation based on weekly work days
+  // Korean labor law: 4-day workers get (4/5) of standard 5-day leave
+  const workDayCount =
+    user.workDays && user.workDays.length > 0 ? user.workDays.length : 5;
+  const workDayRatio = workDayCount / 5;
+
+  const monthlyToGrant = Math.round(rawMonthly * workDayRatio * 10) / 10;
+  const annualToGrant = Math.round(rawAnnual * workDayRatio * 10) / 10;
 
   const shouldOnlyBackfillKeys =
     !user.monthlyLeaveLastGrantedAt || !user.annualLeaveLastGrantedAt;
