@@ -127,7 +127,8 @@ export async function writeMonthlyArchive(yearMonth: string) {
   });
   XLSX.utils.book_append_sheet(workbook, leaveSheet, "연차월차 사용내역");
 
-  XLSX.writeFile(workbook, getWorkbookPath(yearMonth));
+  const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+  await fs.writeFile(getWorkbookPath(yearMonth), buffer);
 }
 
 export async function ensureMonthlyArchiveExists(yearMonth: string) {
