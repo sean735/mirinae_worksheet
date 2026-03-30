@@ -1,6 +1,7 @@
 services:
   app:
-    image: my-project_app:latest
+    build: .
+    image: mirinae-app:latest
     container_name: mirinae-app
     restart: unless-stopped
     ports:
