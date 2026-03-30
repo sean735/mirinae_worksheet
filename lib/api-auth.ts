@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import {
-  getSessionUserFromRequest,
+  verifySessionToken,
+  SESSION_COOKIE_NAME,
   type SessionUser,
 } from "@/lib/auth-session";
 
@@ -15,7 +16,8 @@ export class AuthError extends Error {
 }
 
 export function requireSessionUser(req: NextRequest): SessionUser {
-  const session = getSessionUserFromRequest(req);
+  const token = req.cookies.get(SESSION_COOKIE_NAME)?.value;
+  const session = verifySessionToken(token);
   if (!session) {
     throw new AuthError("로그인이 필요합니다", 401);
   }

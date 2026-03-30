@@ -1,12 +1,12 @@
 import crypto from "node:crypto";
-import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
 
 export const SESSION_COOKIE_NAME = "mirinae_session";
+const COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
 
 export type SessionUser = {
   email: string;
   name: string;
-  picture?: string;
   domain: string;
   iat: number;
   exp: number;
@@ -40,7 +40,7 @@ export function createSessionToken(payload: Omit<SessionUser, "iat" | "exp">) {
   const session: SessionUser = {
     ...payload,
     iat: now,
-    exp: now + 60 * 60 * 24 * 7,
+    exp: now + COOKIE_MAX_AGE,
   };
 
   const encodedPayload = toBase64Url(JSON.stringify(session));
@@ -67,55 +67,24 @@ export function verifySessionToken(token?: string): SessionUser | null {
   }
 }
 
-export function getSessionUserFromRequest(
-  req: NextRequest,
-): SessionUser | null {
-  const token = req.cookies.get(SESSION_COOKIE_NAME)?.value;
+/** Raw Set-Cookie header string — works everywhere, no abstraction */
+export function buildSetCookieHeader(token: string): string {
+  return `${SESSION_COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${COOKIE_MAX_AGE}`;
+}
+
+export function buildClearCookieHeader(): string {
+  return `${SESSION_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+}
+
+/** Read session from server component context */
+export async function getServerSession(): Promise<SessionUser | null> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
   return verifySessionToken(token);
 }
 
-export function setSessionCookie(res: NextResponse, token: string) {
-  const cookieSecure = shouldUseSecureCookie();
-  res.cookies.set({
-    name: SESSION_COOKIE_NAME,
-    value: token,
-    httpOnly: true,
-    sameSite: "lax",
-    secure: cookieSecure,
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7,
-  });
-}
-
-export function clearSessionCookie(res: NextResponse) {
-  const cookieSecure = shouldUseSecureCookie();
-  res.cookies.set({
-    name: SESSION_COOKIE_NAME,
-    value: "",
-    httpOnly: true,
-    sameSite: "lax",
-    secure: cookieSecure,
-    path: "/",
-    maxAge: 0,
-  });
-}
-
-function shouldUseSecureCookie() {
-  const override = process.env.AUTH_COOKIE_SECURE;
-  if (override) {
-    return override.toLowerCase() === "true";
-  }
-
-  const baseUrl = process.env.APP_BASE_URL;
-  if (baseUrl) {
-    return baseUrl.startsWith("https://");
-  }
-
-  return process.env.NODE_ENV === "production";
-}
-
 export function getAllowedDomain() {
-  return process.env.ALLOWED_DOMAIN || process.env.ALLOWED_GOOGLE_DOMAIN || "mirinae.io";
+  return process.env.ALLOWED_DOMAIN || "mirinae.io";
 }
 
 export function isAllowedEmail(email: string) {

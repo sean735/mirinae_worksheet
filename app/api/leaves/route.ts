@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createLeave, ensureUserByEmail, listLeaves } from "@/lib/server-data";
 import type { LeaveRecord } from "@/lib/attendance-store";
-import { CalendarIntegrationError } from "@/lib/google-calendar";
 import { AuthError, requireSessionUser } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
@@ -37,19 +36,6 @@ export async function POST(req: NextRequest) {
         { status: error.status },
       );
     }
-    if (error instanceof CalendarIntegrationError) {
-      return NextResponse.json(
-        {
-          message: error.message,
-          code: error.code,
-          action: error.action,
-          retryable: error.retryable,
-          details: error.details,
-        },
-        { status: error.status || 502 },
-      );
-    }
-
     const message =
       error instanceof Error ? error.message : "휴가 등록에 실패했습니다";
     return NextResponse.json({ message }, { status: 400 });

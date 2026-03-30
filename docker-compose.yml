@@ -12,17 +12,11 @@ services:
       PORT: 3000
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3000}
       AUTH_SESSION_SECRET: ${AUTH_SESSION_SECRET:-replace-me}
-      AUTH_COOKIE_SECURE: "true"
       ALLOWED_DOMAIN: ${ALLOWED_DOMAIN:-mirinae.io}
       MONGODB_URI: ${MONGODB_URI:-mongodb://mongodb:27017}
       MONGODB_DB: ${MONGODB_DB:-mirinae_attendance}
       DEFAULT_USER_ID: ${DEFAULT_USER_ID:-demo-user}
       ATTENDANCE_ARCHIVE_DIR: ${ATTENDANCE_ARCHIVE_DIR:-/app/data/attendance}
-      GOOGLE_CALENDAR_ENABLED: ${GOOGLE_CALENDAR_ENABLED:-false}
-      GOOGLE_CALENDAR_ID: ${GOOGLE_CALENDAR_ID:-}
-      GOOGLE_CLIENT_EMAIL: ${GOOGLE_CLIENT_EMAIL:-}
-      GOOGLE_PRIVATE_KEY: ${GOOGLE_PRIVATE_KEY:-}
-      NEXT_PUBLIC_GOOGLE_TEAM_CALENDAR_ID: ${NEXT_PUBLIC_GOOGLE_TEAM_CALENDAR_ID:-}
     volumes:
       - attendance_data:/app/data/attendance
     depends_on:

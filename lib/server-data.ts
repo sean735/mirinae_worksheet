@@ -11,10 +11,6 @@ import {
   type User,
 } from "@/lib/attendance-store";
 import { writeMonthlyArchive } from "@/lib/monthly-archive";
-import {
-  createLeaveCalendarEvent,
-  deleteCalendarEventById,
-} from "@/lib/google-calendar";
 
 export const DEFAULT_USER_ID = process.env.DEFAULT_USER_ID || "demo-user";
 
@@ -420,15 +416,6 @@ export async function createLeave(
     throw new Error("잔여 휴가가 부족합니다");
   }
 
-  const calendarEventId = await createLeaveCalendarEvent({
-    userName: targetUser.name,
-    date: payload.date,
-    type: payload.type,
-    duration: payload.duration,
-    period: payload.period,
-    reason: payload.reason,
-  });
-
   const now = new Date();
   const doc: DbLeaveRecord = {
     userId,
@@ -437,23 +424,14 @@ export async function createLeave(
     duration: payload.duration,
     period: payload.period,
     reason: payload.reason,
-    calendarEventId: calendarEventId || undefined,
     createdAt: now,
     updatedAt: now,
   };
 
-  let insertedId: ObjectId;
-  try {
-    const inserted = await db
-      .collection<DbLeaveRecord>("leave_records")
-      .insertOne(doc);
-    insertedId = inserted.insertedId;
-  } catch (error) {
-    if (calendarEventId) {
-      await deleteCalendarEventById(calendarEventId);
-    }
-    throw error;
-  }
+  const inserted = await db
+    .collection<DbLeaveRecord>("leave_records")
+    .insertOne(doc);
+  const insertedId = inserted.insertedId;
 
   const updatedUser = await users.findOneAndUpdate(
     { _id: userId },
@@ -492,8 +470,6 @@ export async function deleteLeave(
   if (!leave) {
     throw new Error("휴가 기록을 찾을 수 없습니다");
   }
-
-  await deleteCalendarEventById(leave.calendarEventId);
 
   const deleted = await leaveCollection.deleteOne({
     _id: targetObjectId,

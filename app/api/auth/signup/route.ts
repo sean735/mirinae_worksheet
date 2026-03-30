@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   createSessionToken,
-  setSessionCookie,
+  buildSetCookieHeader,
   getAllowedDomain,
 } from "@/lib/auth-session";
 import { signup } from "@/lib/password-auth";
@@ -13,17 +13,9 @@ function getOrigin(req: NextRequest): string {
   if (forwardedHost) return `${forwardedProto}://${forwardedHost}`;
 
   const host = req.headers.get("host");
-  if (host) return `http://${host}`;
+  if (host && !host.includes(":3000")) return `https://${host}`;
 
   return process.env.APP_BASE_URL || "http://localhost:3000";
-}
-
-function redirectPage(url: string): NextResponse {
-  const html = `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${url}"></head><body></body></html>`;
-  return new NextResponse(html, {
-    status: 200,
-    headers: { "Content-Type": "text/html" },
-  });
 }
 
 export async function POST(req: NextRequest) {
@@ -52,9 +44,18 @@ export async function POST(req: NextRequest) {
 
     const needsSetup = !user.leaveBalanceInitialized || !user.hireDate;
     const redirectPath = needsSetup ? "/status?setup=leave-balance" : "/dashboard";
-    const res = redirectPage(new URL(redirectPath, origin).toString());
-    setSessionCookie(res, token);
-    return res;
+    const redirectUrl = new URL(redirectPath, origin).toString();
+
+    return new NextResponse(
+      `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${redirectUrl}"></head><body>Redirecting...</body></html>`,
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "text/html",
+          "Set-Cookie": buildSetCookieHeader(token),
+        },
+      },
+    );
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "회원가입에 실패했습니다";

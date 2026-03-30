@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Clock, Calendar, Zap } from "lucide-react";
+import { Clock, Calendar, FileSpreadsheet } from "lucide-react";
 
 type Tab = "login" | "signup";
 
@@ -39,9 +39,9 @@ export default function LoginPage() {
       description: "승인 없이 즉시 등록",
     },
     {
-      icon: Zap,
-      title: "Google Calendar",
-      description: "자동 연동",
+      icon: FileSpreadsheet,
+      title: "엑셀 내보내기",
+      description: "출퇴근/연차 엑셀 저장",
     },
   ];
 
