@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
-import { Clock, Calendar, BarChart3, LogOut } from "lucide-react";
+import { Clock, Calendar, CalendarDays, BarChart3, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type User } from "@/lib/attendance-store";
 
 const navItems = [
   { href: "/dashboard", label: "출퇴근", icon: Clock, title: "출퇴근 기록" },
   { href: "/leave", label: "연·월차", icon: Calendar, title: "연차/월차 기록" },
+  { href: "/calendar", label: "캘린더", icon: CalendarDays, title: "팀 캘린더" },
   { href: "/status", label: "내 현황", icon: BarChart3, title: "내 현황" },
 ];
 
