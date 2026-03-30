@@ -18,6 +18,14 @@ function getOrigin(req: NextRequest): string {
   return process.env.APP_BASE_URL || "http://localhost:3000";
 }
 
+function redirectPage(url: string): NextResponse {
+  const html = `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${url}"></head><body></body></html>`;
+  return new NextResponse(html, {
+    status: 200,
+    headers: { "Content-Type": "text/html" },
+  });
+}
+
 export async function POST(req: NextRequest) {
   const origin = getOrigin(req);
 
@@ -43,7 +51,7 @@ export async function POST(req: NextRequest) {
 
     const needsSetup = !user.leaveBalanceInitialized || !user.hireDate;
     const redirectPath = needsSetup ? "/status?setup=leave-balance" : "/dashboard";
-    const res = NextResponse.redirect(new URL(redirectPath, origin));
+    const res = redirectPage(new URL(redirectPath, origin).toString());
     setSessionCookie(res, token);
     return res;
   } catch (error) {
