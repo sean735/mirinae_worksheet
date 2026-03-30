@@ -1,21 +1,38 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
+import { AuthError, requireSessionUser } from "@/lib/api-auth";
 import * as XLSX from "xlsx";
 
 export const dynamic = "force-dynamic";
 
+type AttendanceDoc = {
+  userId: string;
+  date: string;
+  checkIn: string | null;
+  checkOut: string | null;
+  isOvernight: boolean;
+  remark?: string;
+};
+
+type UserDoc = {
+  _id: string;
+  name: string;
+};
+
 export async function GET(req: NextRequest) {
   try {
+    requireSessionUser(req);
+
     const db = await getDb();
-    const users = await db.collection("users").find({}).toArray();
+    const users = await db.collection<UserDoc>("users").find({}).toArray();
     const attendance = await db
-      .collection("attendance_records")
+      .collection<AttendanceDoc>("attendance_records")
       .find({})
       .sort({ date: 1, userId: 1 })
       .toArray();
 
-    const userById = new Map(users.map((user: any) => [user._id, user.name]));
-    const rows = attendance.map((record: any) => ({
+    const userById = new Map(users.map((user) => [user._id, user.name]));
+    const rows = attendance.map((record) => ({
       이름: userById.get(record.userId) || record.userId,
       날짜: record.date,
       출근시각: record.checkIn || "",
@@ -42,6 +59,12 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json(
+        { message: error.message },
+        { status: error.status },
+      );
+    }
     return NextResponse.json({ message: "엑셀 생성 실패" }, { status: 500 });
   }
 }
