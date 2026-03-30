@@ -115,7 +115,7 @@ function shouldUseSecureCookie() {
 }
 
 export function getAllowedDomain() {
-  return process.env.ALLOWED_GOOGLE_DOMAIN || "mirinae.io";
+  return process.env.ALLOWED_DOMAIN || process.env.ALLOWED_GOOGLE_DOMAIN || "mirinae.io";
 }
 
 export function isAllowedEmail(email: string) {

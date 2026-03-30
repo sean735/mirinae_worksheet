@@ -28,30 +28,29 @@ echo ""
 ask "Git 저장소 URL (HTTPS or SSH)"; read -r GIT_REPO
 [ -z "$GIT_REPO" ] && err "Git 저장소 URL이 필요합니다"
 
-ask "도메인 (예: attendance.mirinae.io, 없으면 Enter)"; read -r DOMAIN
-ask "Google OAuth Client ID"; read -r OAUTH_CLIENT_ID
-ask "Google OAuth Client Secret"; read -r OAUTH_CLIENT_SECRET
-ask "허용할 Google 도메인 [mirinae.io]"; read -r ALLOWED_DOMAIN
+ask "허용할 이메일 도메인 [mirinae.io]"; read -r ALLOWED_DOMAIN
 ALLOWED_DOMAIN="${ALLOWED_DOMAIN:-mirinae.io}"
 
-if [ -n "$DOMAIN" ]; then
-  BASE_URL="https://${DOMAIN}"
-else
-  BASE_URL="http://localhost:3000"
-  warn "도메인 없이 localhost 모드로 설치합니다"
+ask "앱 포트 [3000]"; read -r APP_PORT
+APP_PORT="${APP_PORT:-3000}"
+
+ask "ngrok 설치 및 설정할까요? [Y/n]"; read -r INSTALL_NGROK
+INSTALL_NGROK="${INSTALL_NGROK:-Y}"
+
+NGROK_TOKEN=""
+if [[ ! "$INSTALL_NGROK" =~ ^[Nn] ]]; then
+  ask "ngrok Authtoken (https://dashboard.ngrok.com/get-started/your-authtoken)"; read -r NGROK_TOKEN
 fi
 
-REDIRECT_URI="${BASE_URL}/api/auth/google/callback"
 SESSION_SECRET=$(openssl rand -hex 32)
 
 echo ""
 echo -e "${YELLOW}── 설정 확인 ──${NC}"
 echo "  저장소:        $GIT_REPO"
 echo "  설치 경로:     $INSTALL_DIR"
-echo "  도메인:        ${DOMAIN:-없음 (localhost)}"
-echo "  Base URL:      $BASE_URL"
-echo "  Redirect URI:  $REDIRECT_URI"
-echo "  허용 도메인:   $ALLOWED_DOMAIN"
+echo "  허용 도메인:   @$ALLOWED_DOMAIN"
+echo "  포트:          $APP_PORT"
+echo "  ngrok:         $([[ ! "$INSTALL_NGROK" =~ ^[Nn] ]] && echo "설치" || echo "건너뜀")"
 echo ""
 ask "계속 진행할까요? [Y/n]"; read -r CONFIRM
 [[ "$CONFIRM" =~ ^[Nn] ]] && err "취소되었습니다"
@@ -85,7 +84,23 @@ if ! docker info &> /dev/null; then
   docker info &> /dev/null || err "Docker 데몬을 시작할 수 없습니다. 'sudo service docker start'를 실행해주세요."
 fi
 
-# ─── 4. Clone Repository ───
+# ─── 4. Install ngrok ───
+if [[ ! "$INSTALL_NGROK" =~ ^[Nn] ]]; then
+  if command -v ngrok &> /dev/null; then
+    log "ngrok이 이미 설치되어 있습니다: $(ngrok version)"
+  else
+    log "ngrok 설치 중..."
+    curl -fsSL https://ngrok-agent.s3.amazonaws.com/ngrok-v3-stable-linux-amd64.tgz | sudo tar -xz -C /usr/local/bin
+    log "ngrok 설치 완료"
+  fi
+
+  if [ -n "$NGROK_TOKEN" ]; then
+    ngrok config add-authtoken "$NGROK_TOKEN"
+    log "ngrok authtoken 설정 완료"
+  fi
+fi
+
+# ─── 5. Clone Repository ───
 if [ -d "$INSTALL_DIR" ]; then
   warn "$INSTALL_DIR 가 이미 존재합니다. git pull 실행..."
   cd "$INSTALL_DIR"
@@ -97,7 +112,7 @@ else
 fi
 log "프로젝트 디렉토리: $INSTALL_DIR"
 
-# ─── 5. Generate .env ───
+# ─── 6. Generate .env ───
 log ".env 파일 생성 중..."
 cat > .env <<EOF
 # ── MongoDB ──
@@ -105,22 +120,19 @@ MONGODB_URI=mongodb://mongodb:27017
 MONGODB_DB=mirinae_attendance
 
 # ── App ──
-APP_BASE_URL=${BASE_URL}
+APP_BASE_URL=http://localhost:${APP_PORT}
 DEFAULT_USER_ID=demo-user
 ATTENDANCE_ARCHIVE_DIR=/app/data/attendance
 
 # ── Auth ──
 AUTH_SESSION_SECRET=${SESSION_SECRET}
-ALLOWED_GOOGLE_DOMAIN=${ALLOWED_DOMAIN}
-GOOGLE_OAUTH_CLIENT_ID=${OAUTH_CLIENT_ID}
-GOOGLE_OAUTH_CLIENT_SECRET=${OAUTH_CLIENT_SECRET}
-GOOGLE_OAUTH_REDIRECT_URI=${REDIRECT_URI}
+ALLOWED_DOMAIN=${ALLOWED_DOMAIN}
 
 # ── Backup ──
 BACKUP_INTERVAL_HOURS=24
 BACKUP_RETENTION_DAYS=14
 
-# ── Google Calendar (비활성화 상태, 필요시 수정) ──
+# ── Google Calendar (필요시 수정) ──
 GOOGLE_CALENDAR_ENABLED=false
 GOOGLE_CALENDAR_ID=
 GOOGLE_CLIENT_EMAIL=
@@ -128,58 +140,22 @@ GOOGLE_PRIVATE_KEY=
 NEXT_PUBLIC_GOOGLE_TEAM_CALENDAR_ID=
 EOF
 
-# ─── 6. Setup Caddy (if domain provided) ───
-if [ -n "$DOMAIN" ]; then
-  log "Caddy 리버스 프록시 설정 중..."
-
-  cat > Caddyfile <<EOF
-${DOMAIN} {
-    reverse_proxy app:3000
-}
-EOF
-
-  # Patch docker-compose.yml to add Caddy service + volume
-  if ! grep -q "caddy:" docker-compose.yml; then
-    log "docker-compose.yml에 Caddy 서비스 추가 중..."
-
-    # Add caddy service before the volumes: section
-    sed -i '/^volumes:/i \
-  caddy:\
-    image: caddy:2-alpine\
-    container_name: mirinae-caddy\
-    restart: unless-stopped\
-    ports:\
-      - "80:80"\
-      - "443:443"\
-      - "443:443/udp"\
-    volumes:\
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro\
-      - caddy_data:/data\
-      - caddy_config:/config\
-    depends_on:\
-      - app\
-' docker-compose.yml
-
-    # Add caddy volumes
-    echo "  caddy_data:" >> docker-compose.yml
-    echo "  caddy_config:" >> docker-compose.yml
-  fi
-
-  # Remove port 3000 exposure from app service (Caddy handles it)
-  sed -i '/- "3000:3000"/d' docker-compose.yml
+# ─── 7. Update port if not default ───
+if [ "$APP_PORT" != "3000" ]; then
+  sed -i "s/\"3000:3000\"/\"${APP_PORT}:3000\"/" docker-compose.yml
 fi
 
-# ─── 7. Build & Start ───
+# ─── 8. Build & Start ───
 log "Docker 이미지 빌드 중... (처음에는 몇 분 소요)"
 docker compose build --quiet
 
 log "서비스 시작 중..."
 docker compose up -d
 
-# ─── 8. Wait for Health Check ───
+# ─── 9. Wait for Health Check ───
 log "서비스 상태 확인 중..."
 RETRIES=30
-until curl -sf http://localhost:3000/api/health > /dev/null 2>&1; do
+until curl -sf http://localhost:${APP_PORT}/api/health > /dev/null 2>&1; do
   RETRIES=$((RETRIES - 1))
   [ $RETRIES -le 0 ] && { warn "헬스체크 타임아웃. 'docker compose logs app'으로 확인해주세요."; break; }
   sleep 2
@@ -189,52 +165,50 @@ if [ $RETRIES -gt 0 ]; then
   log "앱이 정상 실행 중입니다!"
 fi
 
-# ─── 9. Print Summary ───
+# ─── 10. Start ngrok ───
+if [[ ! "$INSTALL_NGROK" =~ ^[Nn] ]] && command -v ngrok &> /dev/null; then
+  echo ""
+  log "ngrok 터널 시작 중..."
+  ngrok http ${APP_PORT} --log=stdout > /tmp/ngrok.log 2>&1 &
+  NGROK_PID=$!
+  sleep 3
+
+  # Get the public URL from ngrok API
+  NGROK_URL=$(curl -sf http://localhost:4040/api/tunnels 2>/dev/null | grep -o '"public_url":"https://[^"]*' | head -1 | cut -d'"' -f4)
+
+  if [ -n "$NGROK_URL" ]; then
+    log "ngrok 터널 활성화!"
+    echo ""
+    echo -e "  ${GREEN}외부 접속 URL:   ${NGROK_URL}${NC}"
+    echo ""
+  else
+    warn "ngrok URL을 가져올 수 없습니다. 수동 확인: http://localhost:4040"
+  fi
+fi
+
+# ─── 11. Print Summary ───
 echo ""
 echo -e "${GREEN}══════════════════════════════════════════════${NC}"
 echo -e "${GREEN}  설치 완료!${NC}"
 echo -e "${GREEN}══════════════════════════════════════════════${NC}"
 echo ""
-echo "  앱 URL:        $BASE_URL"
+echo "  로컬 URL:      http://localhost:${APP_PORT}"
+if [ -n "${NGROK_URL:-}" ]; then
+  echo "  외부 URL:      ${NGROK_URL}"
+fi
 echo "  설치 경로:     $INSTALL_DIR"
+echo "  허용 도메인:   @$ALLOWED_DOMAIN"
 echo ""
 echo -e "  ${YELLOW}관리 명령어:${NC}"
 echo "    cd $INSTALL_DIR"
-echo "    docker compose logs -f app    # 로그 확인"
+echo "    docker compose logs -f app    # 앱 로그 확인"
 echo "    docker compose restart app    # 앱 재시작"
 echo "    docker compose down           # 전체 중지"
 echo "    docker compose up -d          # 전체 시작"
+if [[ ! "$INSTALL_NGROK" =~ ^[Nn] ]]; then
+  echo ""
+  echo -e "  ${YELLOW}ngrok 명령어:${NC}"
+  echo "    ngrok http ${APP_PORT}              # 터널 재시작"
+  echo "    http://localhost:4040          # ngrok 대시보드"
+fi
 echo ""
-
-if [ -n "$DOMAIN" ]; then
-  echo -e "  ${YELLOW}Google Cloud Console에서 설정 필요:${NC}"
-  echo "    1. OAuth 2.0 승인된 리디렉션 URI에 추가:"
-  echo "       ${REDIRECT_URI}"
-  echo "    2. 승인된 JavaScript 원본에 추가:"
-  echo "       ${BASE_URL}"
-  echo ""
-fi
-
-# ─── 10. WSL Port Forwarding Note ───
-if grep -qi microsoft /proc/version 2>/dev/null; then
-  echo -e "  ${YELLOW}[WSL] Windows에서 포트 포워딩이 필요합니다.${NC}"
-  echo "  PowerShell(관리자)에서 다음 명령어를 실행하세요:"
-  echo ""
-  WSL_IP=$(hostname -I | awk '{print $1}')
-  if [ -n "$DOMAIN" ]; then
-    echo "    netsh interface portproxy add v4tov4 listenport=80 listenaddress=0.0.0.0 connectport=80 connectaddress=${WSL_IP}"
-    echo "    netsh interface portproxy add v4tov4 listenport=443 listenaddress=0.0.0.0 connectport=443 connectaddress=${WSL_IP}"
-    echo ""
-    echo "  Windows 방화벽에서 80, 443 포트를 열어주세요:"
-    echo "    New-NetFirewallRule -DisplayName 'Mirinae HTTP' -Direction Inbound -LocalPort 80 -Protocol TCP -Action Allow"
-    echo "    New-NetFirewallRule -DisplayName 'Mirinae HTTPS' -Direction Inbound -LocalPort 443 -Protocol TCP -Action Allow"
-  else
-    echo "    netsh interface portproxy add v4tov4 listenport=3000 listenaddress=0.0.0.0 connectport=3000 connectaddress=${WSL_IP}"
-    echo ""
-    echo "  Windows 방화벽에서 3000 포트를 열어주세요:"
-    echo "    New-NetFirewallRule -DisplayName 'Mirinae App' -Direction Inbound -LocalPort 3000 -Protocol TCP -Action Allow"
-  fi
-  echo ""
-  warn "WSL IP가 재부팅 시 변경될 수 있습니다. 변경 시 위 명령어를 다시 실행하세요."
-  echo ""
-fi
