@@ -18,84 +18,14 @@ type Tab = "login" | "signup";
 export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("login");
-  const [isLoading, setIsLoading] = useState(false);
-
-  // Login form
-  const [loginEmail, setLoginEmail] = useState("");
-  const [loginPassword, setLoginPassword] = useState("");
-
-  // Signup form
-  const [signupEmail, setSignupEmail] = useState("");
-  const [signupName, setSignupName] = useState("");
-  const [signupPassword, setSignupPassword] = useState("");
-  const [signupConfirm, setSignupConfirm] = useState("");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setError(params.get("error"));
+    if (params.get("tab") === "signup") {
+      setTab("signup");
+    }
   }, []);
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setIsLoading(true);
-
-    try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: loginEmail, password: loginPassword }),
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.message);
-        return;
-      }
-
-      window.location.href = data.redirect;
-    } catch {
-      setError("로그인 중 오류가 발생했습니다");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSignup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-
-    if (signupPassword !== signupConfirm) {
-      setError("비밀번호가 일치하지 않습니다");
-      return;
-    }
-
-    setIsLoading(true);
-
-    try {
-      const res = await fetch("/api/auth/signup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: signupEmail,
-          name: signupName,
-          password: signupPassword,
-        }),
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.message);
-        return;
-      }
-
-      window.location.href = data.redirect;
-    } catch {
-      setError("회원가입 중 오류가 발생했습니다");
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const features = [
     {
@@ -187,15 +117,14 @@ export default function LoginPage() {
             </div>
 
             {tab === "login" ? (
-              <form onSubmit={handleLogin} className="space-y-4">
+              <form action="/api/auth/login" method="POST" className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="login-email">이메일</Label>
                   <Input
                     id="login-email"
+                    name="email"
                     type="email"
                     placeholder="name@mirinae.io"
-                    value={loginEmail}
-                    onChange={(e) => setLoginEmail(e.target.value)}
                     required
                   />
                 </div>
@@ -203,31 +132,25 @@ export default function LoginPage() {
                   <Label htmlFor="login-password">비밀번호</Label>
                   <Input
                     id="login-password"
+                    name="password"
                     type="password"
                     placeholder="비밀번호를 입력하세요"
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
                     required
                   />
                 </div>
-                <Button
-                  type="submit"
-                  className="w-full h-12 text-base"
-                  disabled={isLoading}
-                >
-                  {isLoading ? "로그인 중..." : "로그인"}
+                <Button type="submit" className="w-full h-12 text-base">
+                  로그인
                 </Button>
               </form>
             ) : (
-              <form onSubmit={handleSignup} className="space-y-4">
+              <form action="/api/auth/signup" method="POST" className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="signup-email">이메일</Label>
                   <Input
                     id="signup-email"
+                    name="email"
                     type="email"
                     placeholder="name@mirinae.io"
-                    value={signupEmail}
-                    onChange={(e) => setSignupEmail(e.target.value)}
                     required
                   />
                 </div>
@@ -235,10 +158,9 @@ export default function LoginPage() {
                   <Label htmlFor="signup-name">이름</Label>
                   <Input
                     id="signup-name"
+                    name="name"
                     type="text"
                     placeholder="홍길동"
-                    value={signupName}
-                    onChange={(e) => setSignupName(e.target.value)}
                     required
                   />
                 </div>
@@ -246,32 +168,15 @@ export default function LoginPage() {
                   <Label htmlFor="signup-password">비밀번호</Label>
                   <Input
                     id="signup-password"
+                    name="password"
                     type="password"
                     placeholder="8자 이상"
-                    value={signupPassword}
-                    onChange={(e) => setSignupPassword(e.target.value)}
                     required
                     minLength={8}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-confirm">비밀번호 확인</Label>
-                  <Input
-                    id="signup-confirm"
-                    type="password"
-                    placeholder="비밀번호를 다시 입력하세요"
-                    value={signupConfirm}
-                    onChange={(e) => setSignupConfirm(e.target.value)}
-                    required
-                    minLength={8}
-                  />
-                </div>
-                <Button
-                  type="submit"
-                  className="w-full h-12 text-base"
-                  disabled={isLoading}
-                >
-                  {isLoading ? "가입 중..." : "회원가입"}
+                <Button type="submit" className="w-full h-12 text-base">
+                  회원가입
                 </Button>
               </form>
             )}
