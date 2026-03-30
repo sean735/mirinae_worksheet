@@ -17,6 +17,10 @@ services:
       MONGODB_DB: ${MONGODB_DB:-mirinae_attendance}
       DEFAULT_USER_ID: ${DEFAULT_USER_ID:-demo-user}
       ATTENDANCE_ARCHIVE_DIR: ${ATTENDANCE_ARCHIVE_DIR:-/app/data/attendance}
+      GOOGLE_CALENDAR_ENABLED: ${GOOGLE_CALENDAR_ENABLED:-false}
+      GOOGLE_CALENDAR_ID: ${GOOGLE_CALENDAR_ID:-}
+      GOOGLE_CLIENT_EMAIL: ${GOOGLE_CLIENT_EMAIL:-}
+      GOOGLE_PRIVATE_KEY: ${GOOGLE_PRIVATE_KEY:-}
     volumes:
       - attendance_data:/app/data/attendance
     depends_on:

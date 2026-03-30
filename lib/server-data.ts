@@ -11,6 +11,10 @@ import {
   type User,
 } from "@/lib/attendance-store";
 import { writeMonthlyArchive } from "@/lib/monthly-archive";
+import {
+  createLeaveCalendarEvent,
+  deleteCalendarEventById,
+} from "@/lib/google-calendar";
 
 export const DEFAULT_USER_ID = process.env.DEFAULT_USER_ID || "demo-user";
 
@@ -416,6 +420,16 @@ export async function createLeave(
     throw new Error("잔여 휴가가 부족합니다");
   }
 
+  // Auto-register to Google Calendar (silent fail if not configured)
+  const calendarEventId = await createLeaveCalendarEvent({
+    userName: targetUser.name,
+    date: payload.date,
+    type: payload.type,
+    duration: payload.duration,
+    period: payload.period,
+    reason: payload.reason,
+  });
+
   const now = new Date();
   const doc: DbLeaveRecord = {
     userId,
@@ -424,6 +438,7 @@ export async function createLeave(
     duration: payload.duration,
     period: payload.period,
     reason: payload.reason,
+    calendarEventId: calendarEventId || undefined,
     createdAt: now,
     updatedAt: now,
   };
@@ -470,6 +485,9 @@ export async function deleteLeave(
   if (!leave) {
     throw new Error("휴가 기록을 찾을 수 없습니다");
   }
+
+  // Remove from Google Calendar (silent fail)
+  await deleteCalendarEventById(leave.calendarEventId);
 
   const deleted = await leaveCollection.deleteOne({
     _id: targetObjectId,
