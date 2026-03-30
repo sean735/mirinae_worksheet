@@ -11,7 +11,7 @@ services:
       PORT: 3000
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3000}
       AUTH_SESSION_SECRET: ${AUTH_SESSION_SECRET:-replace-me}
-      AUTH_COOKIE_SECURE: "false"
+      AUTH_COOKIE_SECURE: "true"
       ALLOWED_DOMAIN: ${ALLOWED_DOMAIN:-mirinae.io}
       MONGODB_URI: ${MONGODB_URI:-mongodb://mongodb:27017}
       MONGODB_DB: ${MONGODB_DB:-mirinae_attendance}
