@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Clock, Calendar, BarChart3, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type User } from "@/lib/attendance-store";
@@ -17,23 +17,31 @@ export function Navigation() {
   const pathname = usePathname();
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const didRedirect = useRef(false);
   const currentNav = navItems.find((item) => item.href === pathname);
   const pageTitle = currentNav?.title || "근태관리";
 
+  // Load user once on mount
   useEffect(() => {
     const loadUser = async () => {
-      const res = await fetch("/api/me");
-      const user = (await res.json()) as User;
-      setCurrentUser(user);
+      try {
+        const res = await fetch("/api/me");
+        if (!res.ok) return;
+        const user = (await res.json()) as User;
+        setCurrentUser(user);
 
-      const needsSetup = !user.leaveBalanceInitialized || !user.hireDate;
-      if (needsSetup && pathname !== "/status") {
-        router.replace("/status?setup=leave-balance");
+        const needsSetup = !user.leaveBalanceInitialized || !user.hireDate;
+        if (needsSetup && pathname !== "/status" && !didRedirect.current) {
+          didRedirect.current = true;
+          router.replace("/status?setup=leave-balance");
+        }
+      } catch {
+        // ignore fetch errors
       }
     };
 
     void loadUser();
-  }, [pathname, router]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card md:static md:border-t-0 md:border-r md:h-screen md:w-64 md:flex-shrink-0">
@@ -63,7 +71,7 @@ export function Navigation() {
               <Link
                 key={item.href}
                 href={item.href}
-                prefetch={true}
+                prefetch={false}
                 className={cn(
                   "flex items-center gap-3 px-6 py-3 text-sm font-medium transition-colors",
                   isActive
@@ -82,6 +90,7 @@ export function Navigation() {
         <div className="p-4 border-t border-border">
           <Link
             href="/api/auth/logout"
+            prefetch={false}
             className="flex items-center gap-3 px-2 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
           >
             <LogOut className="h-5 w-5" />
@@ -115,7 +124,7 @@ export function Navigation() {
             <Link
               key={item.href}
               href={item.href}
-              prefetch={true}
+              prefetch={false}
               className={cn(
                 "flex-1 flex flex-col items-center gap-1 py-3 text-xs font-medium transition-colors",
                 isActive ? "text-primary" : "text-muted-foreground",
