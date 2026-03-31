@@ -14,7 +14,7 @@ export default function CalendarPage() {
         <div>
           <h2 className="text-2xl font-bold">팀 캘린더</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            팀 일정 및 연차/월차를 확인하세요. CEO 일정을 보려면 Google 계정으로 로그인된 브라우저에서 확인하세요.
+            CEO 일정을 함께 보려면 브라우저에서 <strong>team@mirinae.io</strong> Google 계정으로 로그인하세요.
           </p>
         </div>
         <Button variant="outline" size="sm" asChild>
