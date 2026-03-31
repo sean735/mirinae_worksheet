@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ExternalLink, UserSearch } from "lucide-react";
+import { ExternalLink, UserSearch, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -9,16 +9,21 @@ const CALENDAR_ID = process.env.NEXT_PUBLIC_GOOGLE_TEAM_CALENDAR_ID || "team@mir
 
 export default function CalendarPage() {
   const [meetEmail, setMeetEmail] = useState("");
+  const [extraCalendars, setExtraCalendars] = useState<string[]>([]);
 
-  const calendarSrc = `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(CALENDAR_ID)}&ctz=Asia%2FSeoul&wkst=2&showTitle=0&showNav=1&showDate=1&showPrint=0&showTabs=1&showCalendars=1&showTz=0`;
+  const allSources = [CALENDAR_ID, ...extraCalendars];
+  const srcParams = allSources.map((s) => `src=${encodeURIComponent(s)}`).join("&");
+  const calendarSrc = `https://calendar.google.com/calendar/embed?${srcParams}&ctz=Asia%2FSeoul&wkst=2&showTitle=0&showNav=1&showDate=1&showPrint=0&showTabs=1&showCalendars=1&showTz=0`;
 
-  const handleMeetWith = () => {
+  const addCalendar = () => {
     const email = meetEmail.trim();
-    if (!email) return;
-    window.open(
-      `https://calendar.google.com/calendar/r?meet=${encodeURIComponent(email)}`,
-      "_blank",
-    );
+    if (!email || extraCalendars.includes(email)) return;
+    setExtraCalendars([...extraCalendars, email]);
+    setMeetEmail("");
+  };
+
+  const removeCalendar = (email: string) => {
+    setExtraCalendars(extraCalendars.filter((e) => e !== email));
   };
 
   return (
@@ -44,19 +49,30 @@ export default function CalendarPage() {
       </div>
 
       {/* Meet with */}
-      <div className="flex gap-2 items-center">
+      <div className="flex flex-wrap items-center gap-2">
         <Input
           type="email"
           placeholder="일정을 확인할 이메일 (예: ceo@mirinae.io)"
           value={meetEmail}
           onChange={(e) => setMeetEmail(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleMeetWith()}
+          onKeyDown={(e) => e.key === "Enter" && addCalendar()}
           className="max-w-sm"
         />
-        <Button variant="secondary" size="sm" onClick={handleMeetWith} className="gap-2 shrink-0">
+        <Button variant="secondary" size="sm" onClick={addCalendar} className="gap-2 shrink-0">
           <UserSearch className="h-4 w-4" />
-          일정 확인
+          일정 추가
         </Button>
+        {extraCalendars.map((email) => (
+          <span
+            key={email}
+            className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm"
+          >
+            {email}
+            <button onClick={() => removeCalendar(email)} className="hover:text-destructive">
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ))}
       </div>
 
       <div className="w-full rounded-lg border border-border overflow-hidden bg-white" style={{ height: "calc(100vh - 240px)" }}>
