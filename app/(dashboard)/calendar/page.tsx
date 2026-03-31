@@ -1,16 +1,29 @@
 "use client";
 
-import { ExternalLink } from "lucide-react";
+import { useState } from "react";
+import { ExternalLink, UserSearch } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 const CALENDAR_ID = process.env.NEXT_PUBLIC_GOOGLE_TEAM_CALENDAR_ID || "team@mirinae.io";
 
 export default function CalendarPage() {
+  const [meetEmail, setMeetEmail] = useState("");
+
   const calendarSrc = `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(CALENDAR_ID)}&ctz=Asia%2FSeoul&wkst=2&showTitle=0&showNav=1&showDate=1&showPrint=0&showTabs=1&showCalendars=1&showTz=0`;
+
+  const handleMeetWith = () => {
+    const email = meetEmail.trim();
+    if (!email) return;
+    window.open(
+      `https://calendar.google.com/calendar/r?meet=${encodeURIComponent(email)}`,
+      "_blank",
+    );
+  };
 
   return (
     <div className="p-4 md:p-8 space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold">팀 캘린더</h2>
           <p className="text-sm text-muted-foreground mt-1">
@@ -30,7 +43,23 @@ export default function CalendarPage() {
         </Button>
       </div>
 
-      <div className="w-full rounded-lg border border-border overflow-hidden bg-white" style={{ height: "calc(100vh - 180px)" }}>
+      {/* Meet with */}
+      <div className="flex gap-2 items-center">
+        <Input
+          type="email"
+          placeholder="일정을 확인할 이메일 (예: ceo@mirinae.io)"
+          value={meetEmail}
+          onChange={(e) => setMeetEmail(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleMeetWith()}
+          className="max-w-sm"
+        />
+        <Button variant="secondary" size="sm" onClick={handleMeetWith} className="gap-2 shrink-0">
+          <UserSearch className="h-4 w-4" />
+          일정 확인
+        </Button>
+      </div>
+
+      <div className="w-full rounded-lg border border-border overflow-hidden bg-white" style={{ height: "calc(100vh - 240px)" }}>
         <iframe
           src={calendarSrc}
           className="w-full h-full border-0"
